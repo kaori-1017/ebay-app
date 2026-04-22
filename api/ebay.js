@@ -1,11 +1,11 @@
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   const { categoryId } = req.query;
   const appId = process.env.EBAY_APP_ID;
   const certId = process.env.EBAY_CERT_ID;
 
-  const credentials = btoa(`${appId}:${certId}`);
+  const credentials = Buffer.from(`${appId}:${certId}`).toString('base64');
 
   const tokenRes = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
     method: 'POST',
@@ -25,4 +25,18 @@ export default async function handler(req, res) {
   }
 
   const url = new URL('https://api.ebay.com/buy/browse/v1/item_summary/search');
-  url.searchParams.se
+  url.searchParams.set('category_ids', categoryId || '293');
+  url.searchParams.set('filter', 'itemLocationCountry:JP,deliveryCountry:US');
+  url.searchParams.set('sort', 'newlyListed');
+  url.searchParams.set('limit', '10');
+
+  const searchRes = await fetch(url.toString(), {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'X-EBAY-C-MARKETPLACE-ID': 'EBAY_US'
+    }
+  });
+
+  const data = await searchRes.json();
+  res.status(200).json(data);
+}
