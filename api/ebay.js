@@ -1,7 +1,7 @@
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  const { categoryId, keyword } = req.query;
+  const { categoryId, keyword, minPrice, maxPrice, freeShipping } = req.query;
   const appId = process.env.EBAY_APP_ID;
   const certId = process.env.EBAY_CERT_ID;
 
@@ -25,12 +25,16 @@ module.exports = async function handler(req, res) {
   }
 
   const url = new URL('https://api.ebay.com/buy/browse/v1/item_summary/search');
-  if (keyword) {
-    url.searchParams.set('q', keyword);
-  } else {
-    url.searchParams.set('category_ids', categoryId || '293');
-  }
-  url.searchParams.set('filter', 'itemLocationCountry:JP,deliveryCountry:US');
+  if (keyword) url.searchParams.set('q', keyword);
+  if (categoryId) url.searchParams.set('category_ids', categoryId);
+
+  const filters = ['itemLocationCountry:JP', 'deliveryCountry:US'];
+  if (minPrice && maxPrice) filters.push(`price:[${minPrice}..${maxPrice}]`);
+  else if (minPrice) filters.push(`price:[${minPrice}..]`);
+  else if (maxPrice) filters.push(`price:[..${maxPrice}]`);
+  if (freeShipping === 'true') filters.push('maxDeliveryCost:0');
+
+  url.searchParams.set('filter', filters.join(','));
   url.searchParams.set('sort', 'newlyListed');
   url.searchParams.set('limit', '50');
 
