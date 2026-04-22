@@ -5,8 +5,9 @@ export default async function handler(req, res) {
   const appId = process.env.EBAY_APP_ID;
   const certId = process.env.EBAY_CERT_ID;
 
-  // まずアクセストークンを取得
-  const credentials = Buffer.from(`${appId}:${certId}`).toString('base64');
+  // Base64エンコード（BufferなしのWeb標準API版）
+  const credentials = btoa(`${appId}:${certId}`);
+
   const tokenRes = await fetch('https://api.ebay.com/identity/v1/oauth2/token', {
     method: 'POST',
     headers: {
@@ -24,7 +25,6 @@ export default async function handler(req, res) {
     return;
   }
 
-  // Browse APIで商品検索
   const url = new URL('https://api.ebay.com/buy/browse/v1/item_summary/search');
   url.searchParams.set('category_ids', categoryId || '293');
   url.searchParams.set('filter', 'itemLocationCountry:JP,deliveryCountry:US');
