@@ -1,7 +1,7 @@
 module.exports = async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
-  const { categoryId } = req.query;
+  const { categoryId, keyword } = req.query;
   const appId = process.env.EBAY_APP_ID;
   const certId = process.env.EBAY_CERT_ID;
 
@@ -25,10 +25,14 @@ module.exports = async function handler(req, res) {
   }
 
   const url = new URL('https://api.ebay.com/buy/browse/v1/item_summary/search');
-  url.searchParams.set('category_ids', categoryId || '293');
+  if (keyword) {
+    url.searchParams.set('q', keyword);
+  } else {
+    url.searchParams.set('category_ids', categoryId || '293');
+  }
   url.searchParams.set('filter', 'itemLocationCountry:JP,deliveryCountry:US');
   url.searchParams.set('sort', 'newlyListed');
-  url.searchParams.set('limit', '10');
+  url.searchParams.set('limit', '50');
 
   const searchRes = await fetch(url.toString(), {
     headers: {
