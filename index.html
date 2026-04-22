@@ -7,12 +7,16 @@
     body { font-family: sans-serif; max-width: 960px; margin: 40px auto; padding: 0 20px; background: #f9f9f9; }
     h1 { font-size: 22px; margin-bottom: 4px; }
     p.sub { color: #888; font-size: 13px; margin-bottom: 20px; }
-    .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+    .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+    .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
     select, button, input { font-size: 14px; padding: 8px 12px; border: 1px solid #ccc; border-radius: 6px; background: white; }
+    input[type="text"] { width: 220px; }
+    input[type="number"] { width: 90px; }
     button { background: #0064d2; color: white; border: none; cursor: pointer; }
     button:hover { background: #004ea0; }
-    button.back { background: #888; }
-    button.back:hover { background: #666; }
+    button.reset { background: #888; }
+    button.reset:hover { background: #666; }
+    label { font-size: 13px; color: #555; }
     #status { font-size: 13px; color: #888; margin-bottom: 12px; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
     .card { background: white; border-radius: 10px; border: 1px solid #e0e0e0; overflow: hidden; transition: box-shadow 0.2s; }
@@ -34,15 +38,16 @@
     .count-btn:hover { background: #e0e0e0; }
     .count-result { margin-top: 6px; font-size: 13px; font-weight: bold; color: #0064d2; text-align: center; }
     .empty { padding: 3rem; text-align: center; color: #aaa; grid-column: 1/-1; }
-    .section-title { font-size: 15px; font-weight: bold; margin-bottom: 12px; color: #333; }
+    .filter-tag { font-size: 12px; background: #fff3cd; color: #856404; padding: 4px 10px; border-radius: 10px; border: 1px solid #ffc107; }
   </style>
 </head>
 <body>
   <h1>eBay 週間リサーチ 🇯🇵→🇺🇸</h1>
   <p class="sub">日本発送・アメリカ向けの出品をリサーチ</p>
 
-  <div class="controls" id="main-controls">
+  <div class="controls">
     <select id="category">
+      <option value="">-- カテゴリーを選ぶ --</option>
       <option value="293">Electronics</option>
       <option value="11450">Fashion</option>
       <option value="353">Collectibles & Art</option>
@@ -52,12 +57,30 @@
       <option value="6028">Motors (Parts)</option>
       <option value="26395">Health & Beauty</option>
     </select>
+    <input type="text" id="keyword" placeholder="キーワード例：Nintendo, Walkman...">
     <button onclick="search()">検索</button>
+    <button class="reset" onclick="resetSearch()">リセット</button>
+  </div>
+
+  <div class="filters">
+    <label>価格：</label>
+    <input type="number" id="minPrice" placeholder="最小 $" min="0">
+    <span style="color:#888">〜</span>
+    <input type="number" id="maxPrice" placeholder="最大 $" min="0">
+    <select id="condition">
+      <option value="">状態：すべて</option>
+      <option value="NEW">New のみ</option>
+      <option value="USED">Used のみ</option>
+    </select>
+    <select id="shipping">
+      <option value="">送料：すべて</option>
+      <option value="free">送料無料のみ</option>
+    </select>
   </div>
 
   <div id="status"></div>
   <div class="grid" id="grid">
-    <div class="empty">カテゴリーを選んで検索してください</div>
+    <div class="empty">カテゴリーまたはキーワードで検索してください</div>
   </div>
 
   <script>
@@ -65,22 +88,50 @@
 
     async function search() {
       const category = document.getElementById('category').value;
+      const keyword = document.getElementById('keyword').value.trim();
+      const minPrice = document.getElementById('minPrice').value;
+      const maxPrice = document.getElementById('maxPrice').value;
+      const condition = document.getElementById('condition').value;
+      const shipping = document.getElementById('shipping').value;
+
+      if (!category && !keyword) {
+        alert('カテゴリーまたはキーワードを入力してください');
+        return;
+      }
+
       document.getElementById('status').textContent = '取得中...';
       document.getElementById('grid').innerHTML = '';
 
-      const res = await fetch(`/api/ebay?categoryId=${category}`);
+      let url = `/api/ebay?`;
+      if (keyword) url += `keyword=${encodeURIComponent(keyword)}&`;
+      if (category) url += `categoryId=${category}&`;
+      if (minPrice) url += `minPrice=${minPrice}&`;
+      if (maxPrice) url += `maxPrice=${maxPrice}&`;
+      if (condition) url += `condition=${condition}&`;
+      if (shipping === 'free') url += `freeShipping=true&`;
+
+      const res = await fetch(url);
       const data = await res.json();
-      renderItems(data, 'カテゴリー検索結果');
+      renderItems(data, condition, shipping, minPrice, maxPrice);
+    }
+
+    function resetSearch() {
+      document.getElementById('keyword').value = '';
+      document.getElementById('category').value = '';
+      document.getElementById('minPrice').value = '';
+      document.getElementById('maxPrice').value = '';
+      document.getElementById('condition').value = '';
+      document.getElementById('shipping').value = '';
+      document.getElementById('status').textContent = '';
+      document.getElementById('grid').innerHTML = '<div class="empty">カテゴリーまたはキーワードで検索してください</div>';
     }
 
     async function searchCount(keyword, btnEl) {
       btnEl.textContent = '調べ中...';
       btnEl.disabled = true;
-
       const res = await fetch(`/api/ebay?keyword=${encodeURIComponent(keyword)}`);
       const data = await res.json();
       const total = data.total || 0;
-
       const resultEl = btnEl.nextElementSibling;
       resultEl.textContent = `🇯🇵→🇺🇸 出品数：${total.toLocaleString()} 件`;
       btnEl.textContent = '再検索';
@@ -88,30 +139,36 @@
     }
 
     function extractKeyword(title) {
-      // タイトルから最初の5単語をキーワードとして使う
       return title.split(' ').slice(0, 5).join(' ');
     }
 
-    function renderItems(data, title) {
-      const items = data.itemSummaries || [];
+    function renderItems(data, condition, shipping, minPrice, maxPrice) {
+      let items = data.itemSummaries || [];
+
+      // クライアント側でフィルタリング
+      if (condition === 'NEW') items = items.filter(i => i.condition === 'New');
+      if (condition === 'USED') items = items.filter(i => i.condition === 'Used');
+      if (shipping === 'free') items = items.filter(i => i.shippingOptions?.[0]?.shippingCost?.value === '0.00');
+      if (minPrice) items = items.filter(i => parseFloat(i.price?.value) >= parseFloat(minPrice));
+      if (maxPrice) items = items.filter(i => parseFloat(i.price?.value) <= parseFloat(maxPrice));
 
       if (items.length === 0) {
-        document.getElementById('status').textContent = '商品が見つかりませんでした。';
-        document.getElementById('grid').innerHTML = '<div class="empty">該当商品なし</div>';
+        document.getElementById('status').textContent = '条件に合う商品が見つかりませんでした。';
+        document.getElementById('grid').innerHTML = '<div class="empty">フィルターを変えてみてください</div>';
         return;
       }
 
       document.getElementById('status').textContent = `${data.total?.toLocaleString() || items.length}件中 ${items.length}件を表示`;
 
-      document.getElementById('grid').innerHTML = items.map((item, i) => {
+      document.getElementById('grid').innerHTML = items.map(item => {
         const price = parseFloat(item.price?.value || 0);
         const jpy = Math.round(price * JPY).toLocaleString();
         const img = item.image?.imageUrl || '';
-        const condition = item.condition || '';
+        const cond = item.condition || '';
         const seller = item.seller?.username || '';
         const url = item.itemWebUrl || '#';
-        const shipping = item.shippingOptions?.[0]?.shippingCost?.value;
-        const shippingText = shipping === '0.00' ? '送料無料' : shipping ? `送料 $${shipping}` : '';
+        const shippingVal = item.shippingOptions?.[0]?.shippingCost?.value;
+        const shippingText = shippingVal === '0.00' ? '送料無料' : shippingVal ? `送料 $${shippingVal}` : '';
         const keyword = extractKeyword(item.title);
 
         return `
@@ -124,7 +181,7 @@
               <div class="card-meta">
                 <span class="tag tag-jp">🇯🇵 日本発送</span>
                 <span class="tag tag-us">🇺🇸 US向け</span>
-                ${condition ? `<span class="tag tag-cond">${condition}</span>` : ''}
+                ${cond ? `<span class="tag tag-cond">${cond}</span>` : ''}
               </div>
               <div class="card-seller">出品者: ${seller}</div>
               <a class="card-link" href="${url}" target="_blank">eBayで見る →</a>
